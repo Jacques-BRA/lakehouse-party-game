@@ -316,6 +316,63 @@ function advanceRoundOrFinish(game) {
   }
 }
 
+// Cleanly remove a player at any phase, repairing whatever they were part of.
+function removePlayerFromGame(game, pid) {
+  const idx = game.players.findIndex((p) => p.playerId === pid);
+  if (idx === -1) return;
+
+  const activeRound = game.phase !== 'LOBBY' && game.phase !== 'FINAL';
+  const wasCurrentGuesser = activeRound && idx === game.guesserIndex;
+  const wasReader = game.round && game.round.readerId === pid;
+  const wasHost = game.hostId === pid;
+
+  // Drop any answer they had submitted this round.
+  if (game.round) {
+    game.round.responses = game.round.responses.filter((r) => r.authorId !== pid);
+  }
+
+  game.players.splice(idx, 1);
+
+  // Reassign host to a remaining player (prefer a connected one).
+  if (wasHost) {
+    const next = game.players.find((p) => p.connected) || game.players[0];
+    game.hostId = next ? next.playerId : null;
+  }
+
+  // Keep guesserIndex pointing at the same logical guesser after the shift.
+  if (idx < game.guesserIndex) game.guesserIndex -= 1;
+
+  if (game.players.length === 0) return; // caller deletes the empty session
+
+  if (activeRound) {
+    if (game.guesserIndex >= game.players.length) {
+      game.phase = 'FINAL';
+      game.round = null;
+      return;
+    }
+    if (wasCurrentGuesser) {
+      // Their round is void — hand a fresh round to whoever is now up.
+      startRound(game);
+      return;
+    }
+    // A non-guesser left mid-round: fix the reader and re-check progress.
+    if (wasReader) {
+      const reader = computeReader(game);
+      game.round.readerId = reader ? reader.playerId : null;
+    }
+    if (game.phase === 'RESPOND') {
+      maybeAdvanceFromRespond(game);
+    } else if (game.phase === 'READ') {
+      const ids = new Set(game.round.responses.map((r) => r.id));
+      game.round.order = game.round.order.filter((id) => ids.has(id));
+      for (const id of Object.keys(game.round.judged)) {
+        if (!ids.has(id)) delete game.round.judged[id];
+      }
+      maybeFinishJudging(game);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Socket handlers
 // ---------------------------------------------------------------------------
@@ -389,6 +446,35 @@ io.on('connection', (socket) => {
     }
     touch(game);
     broadcast(game);
+  });
+
+  // Change your display name (lobby only — before the game starts).
+  socket.on('rename', ({ username }) => {
+    const game = gameOf(socket);
+    if (!game) return;
+    if (game.phase !== 'LOBBY') return;
+    const p = findPlayer(game, socket.data.playerId);
+    if (!p) return;
+    const clean = (username || '').trim().slice(0, 24);
+    if (!clean) return;
+    p.username = clean;
+    touch(game);
+    broadcast(game);
+  });
+
+  // Leave the current session entirely and return to the landing screen.
+  socket.on('leaveSession', () => {
+    const game = gameOf(socket);
+    if (!game) return;
+    removePlayerFromGame(game, socket.data.playerId);
+    socket.data.code = null;
+    if (game.players.length === 0) {
+      sessions.delete(game.code);
+    } else {
+      touch(game);
+      broadcast(game);
+    }
+    socket.emit('left');
   });
 
   socket.on('startGame', () => {

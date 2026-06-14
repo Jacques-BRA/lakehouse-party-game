@@ -86,8 +86,30 @@ h2 { font-size: 22px; margin: 4px 0 6px; }
 .hero { font-size: 56px; line-height: 1; margin-bottom: 4px; }
 
 /* ---------- topbar ---------- */
-.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; }
 .logo { font-weight: 700; color: var(--gold); letter-spacing: 0.3px; }
+.topbar-spacer { width: 62px; } /* balances the leave button so the logo stays centered */
+.leave-btn {
+  width: auto;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--cream-dim);
+  font-size: 13px; font-weight: 600;
+  padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  transition: filter 0.15s, transform 0.08s;
+}
+.leave-btn:active { transform: scale(0.95); }
+
+/* ---------- inline rename (lobby) ---------- */
+.me-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; flex-wrap: wrap; }
+.me-label { color: var(--cream-dim); font-size: 14px; }
+.me-label b { color: var(--cream); }
+.btn.tiny { width: auto; padding: 8px 12px; font-size: 13px; }
+.btn.tiny.primary { color: #3a230c; }
+.tiny-input {
+  width: auto; flex: 1; min-width: 120px;
+  margin: 0; padding: 8px 12px; font-size: 15px;
+}
 .round-pill {
   background: rgba(47, 182, 196, 0.16);
   border: 1px solid rgba(47, 182, 196, 0.35);

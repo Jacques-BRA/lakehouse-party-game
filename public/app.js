@@ -23,6 +23,24 @@
   function joinSession() {
     socket.emit('joinSession', { code, playerId, username });
   }
+  function leaveSession() {
+    socket.emit('leaveSession');
+    code = '';
+    localStorage.removeItem('lh_code');
+    state = null;
+    mountedKey = null;
+    renderLanding();
+  }
+
+  // One delegated handler for the "Leave" button that appears in the topbar.
+  app.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-action="leave"]');
+    if (!t) return;
+    e.preventDefault();
+    const mid = state && state.phase !== 'LOBBY' && state.phase !== 'FINAL';
+    if (mid && !window.confirm('Leave this game? You can join another afterward.')) return;
+    leaveSession();
+  });
 
   socket.on('connect', () => {
     banner.classList.add('hidden');
@@ -34,6 +52,7 @@
     banner.classList.remove('hidden');
   });
   socket.on('errorMsg', (msg) => showToast(msg));
+  socket.on('left', () => { /* server confirmed our exit; UI already on landing */ });
   // The session we tried to (re)join no longer exists — fall back to landing.
   socket.on('noSession', () => {
     code = '';
@@ -94,10 +113,11 @@
   function header() {
     if (!state) return '';
     return `<div class="topbar">
+      <button class="leave-btn" data-action="leave" title="Leave game">← Leave</button>
       <div class="logo">🏕️ LakeHouse</div>
       ${state.phase !== 'LOBBY' && state.phase !== 'FINAL'
         ? `<div class="round-pill">Round ${state.roundNumber}/${state.totalRounds}</div>`
-        : ''}
+        : '<div class="topbar-spacer"></div>'}
     </div>`;
   }
 
@@ -189,6 +209,10 @@
       <h2>The lobby 🛶</h2>
       <p class="sub">${state.connectedCount} ${state.connectedCount === 1 ? 'player' : 'players'} around the fire${
         enough ? '' : ' — need 3+ to start'}</p>
+      <div class="me-row">
+        <span class="me-label">You're <b id="myname">${esc(me.username)}</b></span>
+        <button id="editName" class="btn tiny">✎ Edit name</button>
+      </div>
       <div class="chips">${playerChips(state.players)}</div>
       ${me.isHost
         ? `<button id="start" class="btn primary big" ${enough ? '' : 'disabled'}>Start game 🔥</button>
@@ -197,6 +221,26 @@
     </section>`);
     mount(node);
     if (me.isHost) node.querySelector('#start').onclick = () => socket.emit('startGame');
+
+    // Inline rename: swap the label for an input + save.
+    const meRow = node.querySelector('.me-row');
+    node.querySelector('#editName').onclick = () => {
+      meRow.innerHTML =
+        `<input id="rename" class="input tiny-input" maxlength="24" value="${esc(me.username)}" />` +
+        `<button id="saveName" class="btn tiny primary">Save</button>`;
+      const inp = meRow.querySelector('#rename');
+      inp.focus();
+      inp.select();
+      const save = () => {
+        const v = inp.value.trim();
+        if (!v) return showToast('Name can’t be empty 🙂');
+        username = v.slice(0, 24);
+        localStorage.setItem('lh_username', username);
+        socket.emit('rename', { username });
+      };
+      meRow.querySelector('#saveName').onclick = save;
+      inp.onkeydown = (e) => { if (e.key === 'Enter') save(); };
+    };
   }
 
   function renderPromptSelect() {

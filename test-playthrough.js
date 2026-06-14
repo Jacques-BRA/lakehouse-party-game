@@ -174,11 +174,58 @@ function makePlayer(name, mode) {
   await sleep(300);
   check(!badJoin.state, 'joining a non-existent code yields no state (rejected)');
 
+  // ============ RENAME + LEAVE (fresh session) ============
+  const lh = makePlayer('Lee', 'create');
+  for (let i = 0; i < 30 && !(lh.state && lh.state.code); i++) await sleep(100);
+  const LCODE = lh.state.code;
+  const lj = ['Mia', 'Ned', 'Oji'].map((n) => makePlayer(n, 'join'));
+  await sleep(300);
+  lj.forEach((p) => p.socket.emit('joinSession', { code: LCODE, playerId: p.playerId, username: p.name }));
+  const lparty = [lh, ...lj];
+  for (let i = 0; i < 40; i++) { if (lparty.every((p) => p.state && p.state.connectedCount === 4)) break; await sleep(100); }
+  check(lh.state.connectedCount === 4, 'leave-test: 4 joined a fresh session');
+
+  // rename in the lobby is visible to everyone
+  lj[0].socket.emit('rename', { username: 'Mia2' });
+  await sleep(250);
+  check(lh.state.players.some((p) => p.username === 'Mia2'), 'rename updates name for everyone in lobby');
+
+  // non-host leaves the lobby → removed for everyone
+  lj[2].socket.emit('leaveSession'); // Oji
+  await sleep(300);
+  check(lh.state.connectedCount === 3, 'non-host leave removes player (4 → 3)');
+  check(!lh.state.players.some((p) => p.username === 'Oji'), 'left player no longer listed');
+
+  // host leaves the lobby → host reassigned to someone else
+  check(lh.state.you.isHost, 'Lee is host before leaving');
+  lh.socket.emit('leaveSession');
+  await sleep(300);
+  check(lj[0].state.connectedCount === 2, 'host leave removes host (3 → 2)');
+  const newHost = lj[0].state.players.find((p) => p.isHost);
+  check(!!newHost && newHost.username !== 'Lee', 'host reassigned to a remaining player');
+
+  // add a 3rd back, start, then the current guesser bails mid-round
+  const pat = makePlayer('Pat', 'join');
+  await sleep(200);
+  pat.socket.emit('joinSession', { code: LCODE, playerId: pat.playerId, username: 'Pat' });
+  await sleep(300);
+  const active = [lj[0], lj[1], pat];
+  check(lj[0].state.connectedCount === 3, 'back to 3 players to start');
+  active.find((p) => p.state.you.isHost).socket.emit('startGame');
+  await sleep(300);
+  check(lj[0].state.phase === 'PROMPT_SELECT', 'leave-test game started');
+  const g1 = active.find((p) => p.state.you.role === 'guesser');
+  const g1name = g1.state.you.username;
+  g1.socket.emit('leaveSession'); // guesser abandons mid prompt-select
+  await sleep(350);
+  const remaining = active.filter((p) => p !== g1);
+  check(remaining[0].state.phase === 'PROMPT_SELECT', 'round survives the guesser leaving');
+  const g2 = remaining.find((p) => p.state.you.role === 'guesser');
+  check(!!g2 && g2.state.you.username !== g1name, 'a new guesser took over the abandoned round');
+  check(remaining[0].state.connectedCount === 2, 'player count dropped after guesser left');
+
   console.log('\n' + (failures === 0 ? '✅ ALL CHECKS PASSED' : `❌ ${failures} CHECK(S) FAILED`));
-  players.forEach((p) => p.socket.disconnect());
-  cal2.socket.disconnect();
-  eve.socket.disconnect();
-  badJoin.socket.disconnect();
+  [...players, ...lparty, pat, eve, cal2, badJoin].forEach((p) => p.socket.disconnect());
   server.kill();
   await sleep(200);
   process.exit(failures === 0 ? 0 : 1);

@@ -331,6 +331,7 @@
     const node = el(`<section class="card">
       ${header()}
       <div class="role-tag reader">📖 You're the reader (only you see who wrote what)</div>
+      <div class="prompt-box prompt-recap">${esc(r.prompt)}</div>
       ${r.pass === 'read'
         ? `<h2>Read all answers aloud</h2><p class="sub">Go through the list once so everyone hears the options.</p>`
         : `<h2>Now ${esc(state.guesserName)} guesses</h2><p class="sub">Read each again — tap Right/Wrong on their guess. ${r.judgedCount}/${r.responses.length} done</p>`}

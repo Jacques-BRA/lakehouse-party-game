@@ -146,6 +146,10 @@ function makePlayer(name, mode) {
   check(host.state.players.every((p) => p.score === 0), 'scores reset on playAgain');
   check(host.state.players.length === 4, 'everyone still signed in after playAgain');
   check(host.state.you.isHost, 'original host preserved after playAgain');
+  check(
+    host.state.players.map((p) => p.username).sort().join(',') === 'Ann,Ben,Cal,Dee',
+    'shuffle on playAgain preserves all players (no drops/dupes)'
+  );
 
   // reconnection: drop Cal and rejoin
   const cal = players.find((p) => p.name === 'Cal');

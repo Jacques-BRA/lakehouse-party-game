@@ -189,6 +189,7 @@ h2 { font-size: 22px; margin: 4px 0 6px; }
   margin-bottom: 16px;
   color: #fbe8c8;
 }
+.prompt-recap { font-size: 17px; padding: 12px 14px; margin-bottom: 14px; }
 
 /* ---------- chips ---------- */
 .chips { display: flex; flex-wrap: wrap; gap: 9px; margin: 6px 0 18px; }
